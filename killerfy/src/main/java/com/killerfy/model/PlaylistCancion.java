@@ -1,5 +1,7 @@
 package com.killerfy.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+
 import jakarta.persistence.*;
 
 @Entity
@@ -9,6 +11,7 @@ public class PlaylistCancion {
     @EmbeddedId
     private PlaylistCancionId id = new PlaylistCancionId();
 
+    @JsonBackReference
     @ManyToOne(fetch = FetchType.LAZY)
     @MapsId("playlistId")
     @JoinColumn(name = "playlist_id")
