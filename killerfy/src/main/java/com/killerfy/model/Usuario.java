@@ -5,6 +5,10 @@ import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Entity
 @Table(name = "usuarios")
 public class Usuario {
@@ -18,7 +22,8 @@ public class Usuario {
 
     @Column(nullable = false, unique = true, length = 150)
     private String email;
-
+    
+    @JsonIgnore
     @Column(nullable = false)
     private String password;
 
@@ -27,7 +32,8 @@ public class Usuario {
 
     @Column(name = "fecha_registro", nullable = false, updatable = false)
     private LocalDateTime fechaRegistro;
-
+    
+    @JsonIgnore
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
         name = "usuario_roles",

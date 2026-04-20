@@ -8,7 +8,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/canciones")
-@CrossOrigin(origins = "*") // permite peticiones desde Ionic en desarrollo
 public class CancionController {
 
     private final CancionService cancionService;

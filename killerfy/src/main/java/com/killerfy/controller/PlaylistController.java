@@ -10,7 +10,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/playlists")
-@CrossOrigin(origins = "*")
 public class PlaylistController {
 
     private final PlaylistService playlistService;
