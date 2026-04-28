@@ -3,6 +3,7 @@ package com.killerfy.controller;
 import com.killerfy.model.Cancion;
 import com.killerfy.service.CancionService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -36,11 +37,14 @@ public class CancionController {
         return cancionService.obtenerTodas();
     }
 
+ // Solo ADMIN puede crear, editar o eliminar canciones
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
-    public Cancion crear(@RequestBody Cancion cancion) {
-        return cancionService.guardar(cancion);
+    public ResponseEntity<Cancion> crear(@RequestBody Cancion cancion) {
+        return ResponseEntity.ok(cancionService.guardar(cancion));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public ResponseEntity<Cancion> actualizar(@PathVariable Long id, @RequestBody Cancion datos) {
         return cancionService.obtenerPorId(id).map(c -> {
@@ -53,6 +57,7 @@ public class CancionController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
         cancionService.eliminar(id);

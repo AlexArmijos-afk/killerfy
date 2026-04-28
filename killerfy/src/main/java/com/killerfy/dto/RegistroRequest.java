@@ -1,8 +1,21 @@
 package com.killerfy.dto;
 
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
 public class RegistroRequest {
+	
+	@NotBlank(message = "El nombre es obligatorio")
+    @Size(min = 2, max = 80, message = "El nombre debe tener entre 2 y 80 caracteres")
     private String nombre;
+    
+	@NotBlank(message = "El email es obligatorio")
+    @Email(message = "El email no tiene un formato válido")
     private String email;
+    
+	@NotBlank(message = "La contraseña es obligatoria")
+    @Size(min = 6, message = "La contraseña debe tener al menos 6 caracteres")
     private String password;
 
     public String getNombre() { return nombre; }

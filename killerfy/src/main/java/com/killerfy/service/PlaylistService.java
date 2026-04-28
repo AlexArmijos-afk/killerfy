@@ -16,79 +16,113 @@ import java.util.Optional;
 @Service
 public class PlaylistService {
 
-    private final PlaylistRepository playlistRepository;
-    private final PlaylistCancionRepository playlistCancionRepository;
-    private final CancionRepository cancionRepository;
-    private final UsuarioRepository usuarioRepository;
+	private final PlaylistRepository playlistRepository;
+	private final PlaylistCancionRepository playlistCancionRepository;
+	private final CancionRepository cancionRepository;
+	private final UsuarioRepository usuarioRepository;
 
-    public PlaylistService(PlaylistRepository playlistRepository,
-                           PlaylistCancionRepository playlistCancionRepository,
-                           CancionRepository cancionRepository,
-                           UsuarioRepository usuarioRepository) {
-        this.playlistRepository = playlistRepository;
-        this.playlistCancionRepository = playlistCancionRepository;
-        this.cancionRepository = cancionRepository;
-        this.usuarioRepository = usuarioRepository;
-    }
+	public PlaylistService(PlaylistRepository playlistRepository, PlaylistCancionRepository playlistCancionRepository,
+			CancionRepository cancionRepository, UsuarioRepository usuarioRepository) {
+		this.playlistRepository = playlistRepository;
+		this.playlistCancionRepository = playlistCancionRepository;
+		this.cancionRepository = cancionRepository;
+		this.usuarioRepository = usuarioRepository;
+	}
 
-    // Obtener todas las playlists de un usuario
-    public List<Playlist> obtenerPorUsuario(Long usuarioId) {
-        return playlistRepository.findByUsuarioId(usuarioId);
-    }
+	// ─────────────────────────────────────────────────────
+	// Obtener las playlists del usuario autenticado (por email del token)
+	// ─────────────────────────────────────────────────────
+	public List<Playlist> obtenerPorEmail(String email) {
+		Usuario usuario = usuarioRepository.findByEmail(email)
+				.orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+		return playlistRepository.findByUsuarioId(usuario.getId());
+	}
 
+	// ─────────────────────────────────────────────────────
     // Obtener playlist por ID
-    public Optional<Playlist> obtenerPorId(Long id) {
-        return playlistRepository.findById(id);
-    }
+    // ─────────────────────────────────────────────────────
+	public Optional<Playlist> obtenerPorId(Long id) {
+		return playlistRepository.findById(id);
+	}
 
-    // Crear una nueva playlist
-    public Playlist crear(String nombre, String descripcion, Long usuarioId) {
-        Usuario usuario = usuarioRepository.findById(usuarioId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+	// ─────────────────────────────────────────────────────
+	// Crear playlist — el dueño se busca por email del token
+	// ─────────────────────────────────────────────────────
+	public Playlist crear(String nombre, String descripcion, String email) {
+		Usuario usuario = usuarioRepository.findByEmail(email)
+				.orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
-        Playlist playlist = new Playlist(nombre, descripcion, usuario);
-        return playlistRepository.save(playlist);
-    }
+		Playlist playlist = new Playlist(nombre, descripcion, usuario);
+		return playlistRepository.save(playlist);
+	}
 
-    // Añadir canción a una playlist
-    public PlaylistCancion añadirCancion(Long playlistId, Long cancionId) {
-        Playlist playlist = playlistRepository.findById(playlistId)
-                .orElseThrow(() -> new RuntimeException("Playlist no encontrada"));
+	// ─────────────────────────────────────────────────────
+	// Añadir canción — solo si el email del token coincide con el dueño
+	// ─────────────────────────────────────────────────────
+	public PlaylistCancion añadirCancion(Long playlistId, Long cancionId, String email) {
+		Playlist playlist = playlistRepository.findById(playlistId)
+				.orElseThrow(() -> new RuntimeException("Playlist no encontrada"));
+		verificarPropietario(playlist, email);
 
-        Cancion cancion = cancionRepository.findById(cancionId)
-                .orElseThrow(() -> new RuntimeException("Canción no encontrada"));
+		Cancion cancion = cancionRepository.findById(cancionId)
+				.orElseThrow(() -> new RuntimeException("Canción no encontrada"));
 
-        // Calcula el siguiente orden
-        List<PlaylistCancion> canciones = playlistCancionRepository
-                .findByPlaylistIdOrderByOrdenAsc(playlistId);
-        int siguienteOrden = canciones.size() + 1;
+		List<PlaylistCancion> canciones = playlistCancionRepository.findByPlaylistIdOrderByOrdenAsc(playlistId);
+		int siguienteOrden = canciones.size() + 1;
 
-        PlaylistCancion pc = new PlaylistCancion(playlist, cancion, siguienteOrden);
-        return playlistCancionRepository.save(pc);
-    }
+		PlaylistCancion pc = new PlaylistCancion(playlist, cancion, siguienteOrden);
+		return playlistCancionRepository.save(pc);
+	}
 
-    // Eliminar canción de una playlist
-    public void eliminarCancion(Long playlistId, Long cancionId) {
-        PlaylistCancionId id = new PlaylistCancionId(playlistId, cancionId);
-        playlistCancionRepository.deleteById(id);
-    }
+	// ─────────────────────────────────────────────────────
+	// Eliminar canción — solo si el email del token coincide con el dueño
+	// ─────────────────────────────────────────────────────
+	public void eliminarCancion(Long playlistId, Long cancionId, String email) {
+		Playlist playlist = playlistRepository.findById(playlistId)
+				.orElseThrow(() -> new RuntimeException("Playlist no encontrada"));
+		verificarPropietario(playlist, email);
 
-    // Obtener canciones de una playlist ordenadas
-    public List<PlaylistCancion> obtenerCanciones(Long playlistId) {
-        return playlistCancionRepository.findByPlaylistIdOrderByOrdenAsc(playlistId);
-    }
+		PlaylistCancionId id = new PlaylistCancionId(playlistId, cancionId);
+		playlistCancionRepository.deleteById(id);
+	}
 
-    // Eliminar playlist completa
-    public void eliminar(Long id) {
-        playlistRepository.deleteById(id);
-    }
+	// ─────────────────────────────────────────────────────
+	// Obtener canciones de una playlist ordenadas
+	// ─────────────────────────────────────────────────────
+	public List<PlaylistCancion> obtenerCanciones(Long playlistId) {
+		return playlistCancionRepository.findByPlaylistIdOrderByOrdenAsc(playlistId);
+	}
 
-    // Actualizar nombre y descripción
-    public Optional<Playlist> actualizar(Long id, String nombre, String descripcion) {
-        return playlistRepository.findById(id).map(p -> {
-            p.setNombre(nombre);
-            p.setDescripcion(descripcion);
-            return playlistRepository.save(p);
-        });
-    }
+	// ─────────────────────────────────────────────────────
+	// Eliminar playlist — solo si el email del token coincide con el dueño
+	// ─────────────────────────────────────────────────────
+	public void eliminar(Long id, String email) {
+		Playlist playlist = playlistRepository.findById(id)
+				.orElseThrow(() -> new RuntimeException("Playlist no encontrada"));
+		verificarPropietario(playlist, email);
+		playlistRepository.deleteById(id);
+	}
+
+	// ─────────────────────────────────────────────────────
+	// Actualizar — solo si el email del token coincide con el dueño
+	// ─────────────────────────────────────────────────────
+	public Optional<Playlist> actualizar(Long id, String email, String nombre, String descripcion) {
+		return playlistRepository.findById(id).map(p -> {
+			verificarPropietario(p, email);
+			p.setNombre(nombre);
+			p.setDescripcion(descripcion);
+			return playlistRepository.save(p);
+		});
+	}
+
+	// ─────────────────────────────────────────────────────
+	// Método privado: verifica que el usuario autenticado es el dueño
+	// Lanza SecurityException si no coincide (el controller devuelve 403)
+	// ─────────────────────────────────────────────────────
+	private void verificarPropietario(Playlist playlist, String email) {
+		if (!playlist.getUsuario().getEmail().equals(email)) {
+			throw new SecurityException("No tienes permisos para modificar esta playlist");
+		}
+	}
+
 }
