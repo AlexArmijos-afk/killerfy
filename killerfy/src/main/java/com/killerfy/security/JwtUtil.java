@@ -10,6 +10,7 @@ import com.killerfy.model.Dispositivo.TipoDispositivo;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 
 @Component
 public class JwtUtil {
@@ -27,7 +28,7 @@ public class JwtUtil {
 	// ─────────────────────────────────────────────────────
 	// Genera el token incluyendo email, rol y tipoDispositivo
 	// ─────────────────────────────────────────────────────
-	public String generarToken(String email, String rol, TipoDispositivo tipoDispositivo) {
+	public String generarToken(String email, List<String> rol, TipoDispositivo tipoDispositivo) {
 		return Jwts.builder().subject(email).claim("rol", rol).claim("dispositivo", tipoDispositivo.name())
 				.issuedAt(new Date()).expiration(new Date(System.currentTimeMillis() + expiracion)).signWith(getKey())
 				.compact();
@@ -38,7 +39,22 @@ public class JwtUtil {
 	}
 
 	public String extraerRol(String token) {
-		return (String) getClaims(token).get("rol");
+	    Object rol = getClaims(token).get("rol"); // ← "rol" no "roles"
+	    if (rol instanceof List<?> list && !list.isEmpty()) {
+	        return list.get(0).toString();
+	    }
+	    return rol != null ? rol.toString() : "";
+	}
+
+	public List<String> extraerRoles(String token) {
+	    Object rol = getClaims(token).get("rol"); // ← "rol" no "roles"
+	    if (rol instanceof List<?>) {
+	        return ((List<?>) rol).stream()
+	                .map(Object::toString)
+	                .collect(java.util.stream.Collectors.toList());
+	    }
+	    
+	    return rol != null ? List.of(rol.toString()) : List.of();
 	}
 	
 	// ─────────────────────────────────────────────────────

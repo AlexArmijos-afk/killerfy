@@ -107,4 +107,19 @@ public class UsuarioService {
         }
         usuarioRepository.deleteById(id);
     }
+    
+ // ─────────────────────────────────────────────────────
+ // Admin — cambiar rol de un usuario
+ // ─────────────────────────────────────────────────────
+ public Usuario cambiarRol(Long id, String nuevoRol) {
+     Usuario usuario = usuarioRepository.findById(id)
+         .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+     Rol rol = rolRepository.findByNombreRol(NombreRol.valueOf(nuevoRol))
+         .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + nuevoRol));
+
+     usuario.getRoles().clear();
+     usuario.getRoles().add(rol);
+     return usuarioRepository.save(usuario);
+ }
 }

@@ -71,6 +71,22 @@ public class UsuarioController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+    
+ // ─────────────────────────────────────────────────────
+ // PUT /api/usuarios/admin/{id}/rol (solo ADMIN)
+ // Cambia el rol de un usuario
+ // ─────────────────────────────────────────────────────
+ @PreAuthorize("hasRole('ADMIN')")
+ @PutMapping("/admin/{id}/rol")
+ public ResponseEntity<?> cambiarRol(@PathVariable Long id,
+                                      @RequestBody Map<String, String> body) {
+     try {
+         Usuario actualizado = usuarioService.cambiarRol(id, body.get("rol"));
+         return ResponseEntity.ok(actualizado);
+     } catch (RuntimeException e) {
+         return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+     }
+ }
 
     // ─────────────────────────────────────────────────────
     // GET /api/usuarios/mis-dispositivos

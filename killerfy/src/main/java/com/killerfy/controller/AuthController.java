@@ -12,6 +12,8 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -50,17 +52,19 @@ public class AuthController {
 			return ResponseEntity.status(401).body(Map.of("error", "Email o contraseña incorrectos"));
 		}
 
-		String rol = usuario.getRoles().iterator().next().getNombreRol().name();
+		List<String> roles = usuario.getRoles().stream()
+				.map(r -> r.getNombreRol().name())
+				.collect(java.util.stream.Collectors.toList());
 		TipoDispositivo tipoDispositivo = request.getTipoDispositivo();
 
 		// Registra o activa la sesión del dispositivo
 		sesionDispositivoService.registrarSesion(usuario.getEmail(), tipoDispositivo);
 
 		// Genera el token incluyendo el dispositivo
-		String token = jwtUtil.generarToken(usuario.getEmail(), rol, tipoDispositivo);
+			String token = jwtUtil.generarToken(usuario.getEmail(), roles, tipoDispositivo);
 
 		return ResponseEntity.ok(Map.of("token", token, "id", usuario.getId(), "nombre", usuario.getNombre(), "email",
-				usuario.getEmail(), "rol", rol, "dispositivo", tipoDispositivo.name()));
+				usuario.getEmail(), "rol", roles, "dispositivo", tipoDispositivo.name()));
 	}
 
 	// ─────────────────────────────────────────────────────

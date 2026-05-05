@@ -25,8 +25,9 @@ public class Cancion {
     @Column(name = "duracion_segundos")
     private Integer duracionSegundos;
 
-    @Column(name = "url_audio", nullable = false, length = 500)
-    private String urlAudio;
+    
+    @Column(name = "nombre_archivo")
+    private String nombreArchivo;
 
     // Constructores
     public Cancion() {}
@@ -37,10 +38,13 @@ public class Cancion {
         this.artista = artista;
         this.album = album;
         this.duracionSegundos = duracionSegundos;
-        this.urlAudio = urlAudio;
     }
 
     // Getters y Setters
+    
+    public String getNombreArchivo() { return nombreArchivo; }
+    public void setNombreArchivo(String nombreArchivo) { this.nombreArchivo = nombreArchivo; }
+    
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -56,6 +60,5 @@ public class Cancion {
     public Integer getDuracionSegundos() { return duracionSegundos; }
     public void setDuracionSegundos(Integer duracionSegundos) { this.duracionSegundos = duracionSegundos; }
 
-    public String getUrlAudio() { return urlAudio; }
-    public void setUrlAudio(String urlAudio) { this.urlAudio = urlAudio; }
+    
 }

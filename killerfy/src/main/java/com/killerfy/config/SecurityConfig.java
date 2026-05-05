@@ -35,6 +35,9 @@ public class SecurityConfig {
                 s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
+                // Dentro de tu SecurityFilterChain, en el requestMatchers permitAll:
+                .requestMatchers("/ws/**").permitAll()
+                .requestMatchers("/api/canciones/*/stream").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated()
             )
