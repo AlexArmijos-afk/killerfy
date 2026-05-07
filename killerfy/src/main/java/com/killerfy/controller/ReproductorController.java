@@ -25,15 +25,16 @@ public class ReproductorController {
      */
     @MessageMapping("/reproductor")
     public void procesarEvento(@Payload ReproductorEvent evento, Principal principal) {
-        // Asociar el email del usuario autenticado al evento
+        if (principal == null) {
+            System.out.println("[WS] ERROR: principal es null, token no autenticado");
+            return;
+        }
+        
         String email = principal.getName();
+        System.out.println("[WS] Evento recibido de: " + email + " tipo: " + evento.getTipo());
         evento.setUsuarioEmail(email);
 
-        // Broadcast a todos los dispositivos del usuario
-        messagingTemplate.convertAndSend(
-            "/topic/reproductor/" + email,
-            evento
-        );
+        messagingTemplate.convertAndSend("/topic/reproductor/" + email, evento);
     }
 
     /**
