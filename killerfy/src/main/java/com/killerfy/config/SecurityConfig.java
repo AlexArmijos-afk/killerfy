@@ -40,6 +40,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/canciones/*/stream").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/reproductor/estado").authenticated()
+                .requestMatchers("/api/auth/reactivar").authenticated()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
@@ -51,12 +52,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOrigins(List.of(
-            "http://localhost:8100",   // Ionic web
-            "http://localhost:4200",   // Angular dev server
-            "capacitor://localhost",   // Ionic Android/iOS
-            "http://localhost"         // Electron escritorio
-        ));
+        config.setAllowedOriginPatterns(List.of("*"));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));

@@ -2,102 +2,155 @@ package com.killerfy.controller;
 
 import com.killerfy.dto.LoginRequest;
 import com.killerfy.dto.RegistroRequest;
+import com.killerfy.dto.ReproductorEvent;
 import com.killerfy.model.Dispositivo.TipoDispositivo;
+import com.killerfy.model.SesionDispositivo;
 import com.killerfy.model.Usuario;
 import com.killerfy.security.JwtUtil;
 import com.killerfy.service.SesionDispositivoService;
 import com.killerfy.service.UsuarioService;
-
 import jakarta.validation.Valid;
-
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
 
-	// Atributos
-	private final UsuarioService usuarioService;
-	private final JwtUtil jwtUtil;
-	private final SesionDispositivoService sesionDispositivoService;
+    private final UsuarioService usuarioService;
+    private final JwtUtil jwtUtil;
+    private final SesionDispositivoService sesionDispositivoService;
+    private final SimpMessagingTemplate messagingTemplate; // ← añadido al final
 
-	// Constructor
-	public AuthController(UsuarioService usuarioService, JwtUtil jwtUtil,
-			SesionDispositivoService sesionDispositivoService) {
-		this.usuarioService = usuarioService;
-		this.jwtUtil = jwtUtil;
-		this.sesionDispositivoService = sesionDispositivoService;
-	}
+    // ✅ Todo por constructor, sin @Autowired en campo
+    public AuthController(UsuarioService usuarioService,
+                          JwtUtil jwtUtil,
+                          SesionDispositivoService sesionDispositivoService,
+                          SimpMessagingTemplate messagingTemplate) {
+        this.usuarioService = usuarioService;
+        this.jwtUtil = jwtUtil;
+        this.sesionDispositivoService = sesionDispositivoService;
+        this.messagingTemplate = messagingTemplate;
+    }
 
-	// ─────────────────────────────────────────────────────
-	// POST /api/auth/login
-	// Body: { email, password, tipoDispositivo: "WEB" | "ANDROID" | "DESKTOP" }
-	// ─────────────────────────────────────────────────────
-	@PostMapping("/login")
-	public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest request) {
-		Optional<Usuario> usuarioOpt = usuarioService.buscarPorEmail(request.getEmail());
+    @PostMapping("/login")
+    public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest request) {
+        Optional<Usuario> usuarioOpt = usuarioService.buscarPorEmail(request.getEmail());
+        if (usuarioOpt.isEmpty())
+            return ResponseEntity.status(401).body(Map.of("error", "Email o contraseña incorrectos"));
+        Usuario usuario = usuarioOpt.get();
+        if (!usuarioService.verificarPassword(request.getPassword(), usuario.getPassword()))
+            return ResponseEntity.status(401).body(Map.of("error", "Email o contraseña incorrectos"));
 
-		if (usuarioOpt.isEmpty()) {
-			return ResponseEntity.status(401).body(Map.of("error", "Email o contraseña incorrectos"));
-		}
+        List<String> roles = usuario.getRoles().stream()
+                .map(r -> r.getNombreRol().name())
+                .collect(Collectors.toList());
+        TipoDispositivo tipoDispositivo = request.getTipoDispositivo();
+        sesionDispositivoService.registrarSesion(usuario.getEmail(), tipoDispositivo);
+        String token = jwtUtil.generarToken(usuario.getEmail(), roles, tipoDispositivo);
 
-		Usuario usuario = usuarioOpt.get();
+        return ResponseEntity.ok(Map.of(
+                "token", token,
+                "id", usuario.getId(),
+                "nombre", usuario.getNombre(),
+                "email", usuario.getEmail(),
+                "rol", roles,
+                "dispositivo", tipoDispositivo.name()
+        ));
+    }
 
-		if (!usuarioService.verificarPassword(request.getPassword(), usuario.getPassword())) {
-			return ResponseEntity.status(401).body(Map.of("error", "Email o contraseña incorrectos"));
-		}
+    @PostMapping("/registro")
+    public ResponseEntity<Map<String, Object>> registro(@Valid @RequestBody RegistroRequest request) {
+        if (usuarioService.existeEmail(request.getEmail()))
+            return ResponseEntity.badRequest().body(Map.of("error", "El email ya está registrado"));
+        Usuario nuevo = usuarioService.registrar(request.getNombre(), request.getEmail(), request.getPassword());
+        return ResponseEntity.ok(Map.of(
+                "mensaje", "Usuario registrado correctamente",
+                "id", nuevo.getId(),
+                "nombre", nuevo.getNombre(),
+                "email", nuevo.getEmail()
+        ));
+    }
 
-		List<String> roles = usuario.getRoles().stream()
-				.map(r -> r.getNombreRol().name())
-				.collect(java.util.stream.Collectors.toList());
-		TipoDispositivo tipoDispositivo = request.getTipoDispositivo();
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, Object>> logout(@RequestHeader("Authorization") String authHeader) {
+        String token = authHeader.substring(7);
+        String email = jwtUtil.extraerEmail(token);
+        TipoDispositivo tipoDispositivo = jwtUtil.extraerTipoDispositivo(token);
+        sesionDispositivoService.cerrarSesion(email, tipoDispositivo);
+        return ResponseEntity.ok(Map.of("mensaje", "Sesión cerrada correctamente"));
+    }
 
-		// Registra o activa la sesión del dispositivo
-		sesionDispositivoService.registrarSesion(usuario.getEmail(), tipoDispositivo);
+    @GetMapping("/verificar")
+    public ResponseEntity<?> verificar() {
+        return ResponseEntity.ok().build();
+    }
 
-		// Genera el token incluyendo el dispositivo
-			String token = jwtUtil.generarToken(usuario.getEmail(), roles, tipoDispositivo);
+    @PostMapping("/dispositivo/desconectar")
+    public ResponseEntity<Map<String, Object>> desconectarDispositivo(
+            @RequestBody(required = false) Map<String, String> body,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
-		return ResponseEntity.ok(Map.of("token", token, "id", usuario.getId(), "nombre", usuario.getNombre(), "email",
-				usuario.getEmail(), "rol", roles, "dispositivo", tipoDispositivo.name()));
-	}
+        String token = null;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+        } else if (body != null && body.containsKey("token")) {
+            token = body.get("token");
+        }
+        if (token == null) return ResponseEntity.status(401).build();
 
-	// ─────────────────────────────────────────────────────
-	// POST /api/auth/registro
-	// Body: { nombre, email, password }
-	// ─────────────────────────────────────────────────────
-	@PostMapping("/registro")
-	public ResponseEntity<Map<String, Object>> registro(@Valid @RequestBody RegistroRequest request) {
-		if (usuarioService.existeEmail(request.getEmail())) {
-			return ResponseEntity.badRequest().body(Map.of("error", "El email ya está registrado"));
-		}
+        String email = jwtUtil.extraerEmail(token);
+        TipoDispositivo tipoDispositivo = jwtUtil.extraerTipoDispositivo(token);
 
-		Usuario nuevo = usuarioService.registrar(request.getNombre(), request.getEmail(), request.getPassword());
+        sesionDispositivoService.cerrarSesion(email, tipoDispositivo);
 
-		return ResponseEntity.ok(Map.of("mensaje", "Usuario registrado correctamente", "id", nuevo.getId(), "nombre",
-				nuevo.getNombre(), "email", nuevo.getEmail()));
-	}
+        // Notificar por WS a todos los dispositivos del usuario
+        ReproductorEvent evento = new ReproductorEvent();
+        evento.setTipo(ReproductorEvent.Tipo.TRANSFERIR);
+        evento.setUsuarioEmail(email);
+        List<String> activosRestantes = sesionDispositivoService
+                .obtenerSesionesPorEmail(email)
+                .stream()
+                .filter(SesionDispositivo::getDispositivoActivo)
+                .map(s -> s.getDispositivo().getTipo().name())
+                .collect(Collectors.toList());
+        evento.setDispositivosActivos(activosRestantes);
+        messagingTemplate.convertAndSend("/topic/reproductor/" + email, evento);
 
-	// ─────────────────────────────────────────────────────
-	// POST /api/auth/logout
-	// Extrae el email y dispositivo del token y pone dispositivoActivo = false
-	// No necesita body — toda la info viene en el JWT del header
-	// ─────────────────────────────────────────────────────
-	@PostMapping("/logout")
-	public ResponseEntity<Map<String, Object>> logout(@RequestHeader("Authorization") String authHeader) {
+        return ResponseEntity.ok(Map.of("mensaje", "Dispositivo marcado como inactivo"));
+    }
+    
+    
+    @PostMapping("/reactivar")
+    public ResponseEntity<Map<String, Object>> reactivarDispositivo(
+            @RequestHeader("Authorization") String authHeader) {
 
-		String token = authHeader.substring(7);
-		String email = jwtUtil.extraerEmail(token);
-		TipoDispositivo tipoDispositivo = jwtUtil.extraerTipoDispositivo(token);
+        String token = authHeader.substring(7);
+        String email = jwtUtil.extraerEmail(token);
+        TipoDispositivo tipoDispositivo = jwtUtil.extraerTipoDispositivo(token);
 
-		sesionDispositivoService.cerrarSesion(email, tipoDispositivo);
+        // Marca el dispositivo como activo en BD
+        sesionDispositivoService.registrarSesion(email, tipoDispositivo);
 
-		return ResponseEntity.ok(Map.of("mensaje", "Sesión cerrada correctamente"));
-	}
+        // Notificar al resto de dispositivos del usuario que este volvió
+        ReproductorEvent evento = new ReproductorEvent();
+        evento.setTipo(ReproductorEvent.Tipo.TRANSFERIR);
+        evento.setUsuarioEmail(email);
+        List<String> activosAhora = sesionDispositivoService
+                .obtenerSesionesPorEmail(email)
+                .stream()
+                .filter(SesionDispositivo::getDispositivoActivo)
+                .map(s -> s.getDispositivo().getTipo().name())
+                .collect(Collectors.toList());
+        evento.setDispositivosActivos(activosAhora);
+        messagingTemplate.convertAndSend("/topic/reproductor/" + email, evento);
 
+        return ResponseEntity.ok(Map.of("mensaje", "Dispositivo reactivado"));
+    }
 }

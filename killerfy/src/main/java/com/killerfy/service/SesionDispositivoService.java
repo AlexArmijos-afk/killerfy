@@ -73,4 +73,21 @@ public class SesionDispositivoService {
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         return sesionRepository.findByUsuarioId(usuario.getId());
     }
+    
+ // Actualiza qué dispositivos tienen sonido activo (puede ser varios)
+    public void actualizarDispositivosSonando(String email, List<String> tiposActivos) {
+        Usuario usuario = usuarioRepository.findByEmail(email)
+            .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+
+        List<SesionDispositivo> sesiones = sesionRepository.findByUsuarioId(usuario.getId());
+        for (SesionDispositivo sesion : sesiones) {
+            boolean debesonar = tiposActivos.contains(
+                sesion.getDispositivo().getTipo().name()
+            );
+            sesion.setDispositivoActivo(debesonar);
+            sesionRepository.save(sesion);
+        }
+    }
+    
+    
 }

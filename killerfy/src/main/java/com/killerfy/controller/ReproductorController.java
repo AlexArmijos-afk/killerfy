@@ -1,6 +1,9 @@
 package com.killerfy.controller;
 
 import com.killerfy.dto.ReproductorEvent;
+import com.killerfy.model.Dispositivo;
+import com.killerfy.service.SesionDispositivoService;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -18,10 +21,13 @@ public class ReproductorController {
 
     private final SimpMessagingTemplate messagingTemplate;
     private final Map<String, ReproductorEvent> estadoActual = new ConcurrentHashMap<>();
+    private final SesionDispositivoService sesionDispositivoService;
 
-    public ReproductorController(SimpMessagingTemplate messagingTemplate) {
-        this.messagingTemplate = messagingTemplate;
-    }
+    public ReproductorController(SimpMessagingTemplate messagingTemplate,
+            SesionDispositivoService sesionDispositivoService) {
+this.messagingTemplate = messagingTemplate;
+this.sesionDispositivoService = sesionDispositivoService;
+}
 
     @MessageMapping("/reproductor")
     public void procesarEvento(@Payload ReproductorEvent evento, Principal principal) {
@@ -44,6 +50,15 @@ public class ReproductorController {
     public void transferirReproduccion(@Payload ReproductorEvent evento, Principal principal) {
         String email = principal.getName();
         evento.setUsuarioEmail(email);
+
+        // Actualizar en BD qué dispositivos deben sonar
+        if (evento.getDispositivosActivos() != null && !evento.getDispositivosActivos().isEmpty()) {
+            sesionDispositivoService.actualizarDispositivosSonando(
+                email, evento.getDispositivosActivos()
+            );
+        }
+
+        // Retransmitir a todos los dispositivos del usuario
         messagingTemplate.convertAndSend("/topic/reproductor/" + email, evento);
     }
 

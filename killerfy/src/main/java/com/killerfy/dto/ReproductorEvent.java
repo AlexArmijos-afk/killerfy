@@ -1,5 +1,7 @@
 package com.killerfy.dto;
 
+import java.util.List;
+
 public class ReproductorEvent {
 
     /**
@@ -16,6 +18,7 @@ public class ReproductorEvent {
     private Double progreso;
     private String dispositivo;
     private String usuarioEmail;
+    private List<String> dispositivosActivos;
 
     // Constructors
     public ReproductorEvent() {}
@@ -36,4 +39,6 @@ public class ReproductorEvent {
     public void setDispositivo(String d) { this.dispositivo = d; }
     public String getUsuarioEmail() { return usuarioEmail; }
     public void setUsuarioEmail(String e) { this.usuarioEmail = e; }
+    public List<String> getDispositivosActivos() { return dispositivosActivos; }
+    public void setDispositivosActivos(List<String> d) { this.dispositivosActivos = d; }
 }
