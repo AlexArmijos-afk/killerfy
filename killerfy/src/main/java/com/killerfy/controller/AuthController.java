@@ -110,17 +110,25 @@ public class AuthController {
 
         sesionDispositivoService.cerrarSesion(email, tipoDispositivo);
 
-        // Notificar por WS a todos los dispositivos del usuario
+        List<SesionDispositivo> restantes = sesionDispositivoService
+            .obtenerSesionesPorEmail(email)
+            .stream()
+            .filter(SesionDispositivo::getDispositivoActivo)
+            .collect(Collectors.toList());
+
+        List<String> dispositivosReproduciendo;
+        if (!restantes.isEmpty()) {
+            String primerTipo = restantes.get(0).getDispositivo().getTipo().name();
+            sesionDispositivoService.actualizarReproduciendo(email, List.of(primerTipo));
+            dispositivosReproduciendo = List.of(primerTipo); // ← antes: filtraba restantes stale
+        } else {
+            dispositivosReproduciendo = List.of();
+        }
+
         ReproductorEvent evento = new ReproductorEvent();
         evento.setTipo(ReproductorEvent.Tipo.TRANSFERIR);
         evento.setUsuarioEmail(email);
-        List<String> activosRestantes = sesionDispositivoService
-                .obtenerSesionesPorEmail(email)
-                .stream()
-                .filter(SesionDispositivo::getDispositivoActivo)
-                .map(s -> s.getDispositivo().getTipo().name())
-                .collect(Collectors.toList());
-        evento.setDispositivosActivos(activosRestantes);
+        evento.setDispositivosActivos(dispositivosReproduciendo); // ← ahora sí tiene el valor correcto
         messagingTemplate.convertAndSend("/topic/reproductor/" + email, evento);
 
         return ResponseEntity.ok(Map.of("mensaje", "Dispositivo marcado como inactivo"));
@@ -130,27 +138,34 @@ public class AuthController {
     @PostMapping("/reactivar")
     public ResponseEntity<Map<String, Object>> reactivarDispositivo(
             @RequestHeader("Authorization") String authHeader) {
-
         String token = authHeader.substring(7);
         String email = jwtUtil.extraerEmail(token);
         TipoDispositivo tipoDispositivo = jwtUtil.extraerTipoDispositivo(token);
 
-        // Marca el dispositivo como activo en BD
         sesionDispositivoService.registrarSesion(email, tipoDispositivo);
 
-        // Notificar al resto de dispositivos del usuario que este volvió
+        // Obtener el estado actualizado para devolver al front
+        List<SesionDispositivo> sesiones = sesionDispositivoService.obtenerSesionesPorEmail(email);
+
+        // Notificar a todos los dispositivos del usuario
         ReproductorEvent evento = new ReproductorEvent();
         evento.setTipo(ReproductorEvent.Tipo.TRANSFERIR);
         evento.setUsuarioEmail(email);
-        List<String> activosAhora = sesionDispositivoService
-                .obtenerSesionesPorEmail(email)
-                .stream()
-                .filter(SesionDispositivo::getDispositivoActivo)
-                .map(s -> s.getDispositivo().getTipo().name())
-                .collect(Collectors.toList());
-        evento.setDispositivosActivos(activosAhora);
+        List<String> reproduciendo = sesiones.stream()
+            .filter(s -> Boolean.TRUE.equals(s.getReproduciendo()))
+            .map(s -> s.getDispositivo().getTipo().name())
+            .collect(Collectors.toList());
+        evento.setDispositivosActivos(reproduciendo);
         messagingTemplate.convertAndSend("/topic/reproductor/" + email, evento);
 
-        return ResponseEntity.ok(Map.of("mensaje", "Dispositivo reactivado"));
+        // ✅ Decirle al front si ESTE dispositivo debe sonar
+        boolean esteReproduciendo = sesiones.stream()
+            .filter(s -> s.getDispositivo().getTipo() == tipoDispositivo)
+            .anyMatch(s -> Boolean.TRUE.equals(s.getReproduciendo()));
+
+        return ResponseEntity.ok(Map.of(
+            "mensaje", "Dispositivo reactivado",
+            "reproduciendo", esteReproduciendo
+        ));
     }
 }

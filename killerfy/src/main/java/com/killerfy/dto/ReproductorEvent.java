@@ -1,6 +1,7 @@
 package com.killerfy.dto;
 
 import java.util.List;
+import java.util.Map;
 
 public class ReproductorEvent {
 
@@ -19,6 +20,7 @@ public class ReproductorEvent {
     private String dispositivo;
     private String usuarioEmail;
     private List<String> dispositivosActivos;
+    private List<Map<String, Object>> cola; 
 
     // Constructors
     public ReproductorEvent() {}
@@ -41,4 +43,7 @@ public class ReproductorEvent {
     public void setUsuarioEmail(String e) { this.usuarioEmail = e; }
     public List<String> getDispositivosActivos() { return dispositivosActivos; }
     public void setDispositivosActivos(List<String> d) { this.dispositivosActivos = d; }
+    
+    public List<Map<String, Object>> getCola() { return cola; }
+    public void setCola(List<Map<String, Object>> c) { this.cola = c; }
 }

@@ -12,6 +12,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class WebSocketAuthInterceptor implements ChannelInterceptor {
@@ -37,6 +38,15 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                     if (jwtUtil.esValido(token)) {
                         String email = jwtUtil.extraerEmail(token);
                         String rol   = jwtUtil.extraerRol(token);
+
+                        // Guardar en sesión para poder identificar el dispositivo en SessionDisconnectEvent
+                        Map<String, Object> attrs = accessor.getSessionAttributes();
+                        if (attrs != null) {
+                            attrs.put("email", email);
+                            try {
+                                attrs.put("dispositivo", jwtUtil.extraerTipoDispositivo(token).name());
+                            } catch (Exception ignored) {}
+                        }
 
                         UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(

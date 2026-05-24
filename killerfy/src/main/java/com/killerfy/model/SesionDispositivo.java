@@ -21,6 +21,9 @@ public class SesionDispositivo {
 
     @Column(name = "dispositivo_activo", nullable = false)
     private Boolean dispositivoActivo = false;
+    
+    @Column(name = "reproduciendo", nullable = false)
+    private Boolean reproduciendo = false;
 
     @Column(name = "fecha_ultimo_evento")
     private LocalDateTime fechaUltimoEvento;
@@ -55,4 +58,7 @@ public class SesionDispositivo {
 
     public LocalDateTime getFechaUltimoEvento() { return fechaUltimoEvento; }
     public void setFechaUltimoEvento(LocalDateTime fechaUltimoEvento) { this.fechaUltimoEvento = fechaUltimoEvento; }
+    
+    public Boolean getReproduciendo() { return reproduciendo; }
+    public void setReproduciendo(Boolean reproduciendo) { this.reproduciendo = reproduciendo; }
 }

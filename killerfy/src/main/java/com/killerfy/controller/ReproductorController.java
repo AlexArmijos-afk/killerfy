@@ -13,8 +13,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.security.Principal;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Controller
 public class ReproductorController {
@@ -31,17 +33,31 @@ this.sesionDispositivoService = sesionDispositivoService;
 
     @MessageMapping("/reproductor")
     public void procesarEvento(@Payload ReproductorEvent evento, Principal principal) {
-        if (principal == null) {
-            System.out.println("[WS] ERROR: principal es null, token no autenticado");
-            return;
+        if (principal == null) return;
+        String email = principal.getName();
+        evento.setUsuarioEmail(email);
+        actualizarEstado(email, evento);
+
+        if (evento.getTipo() == ReproductorEvent.Tipo.CAMBIAR_CANCION) {
+            // ✅ Respetar quién debe sonar según el frontend, NO sobreescribir con el emisor
+            List<String> dispositivosQueDebenSonar = (evento.getDispositivosActivos() != null
+                    && !evento.getDispositivosActivos().isEmpty())
+                ? evento.getDispositivosActivos()
+                : (evento.getDispositivo() != null ? List.of(evento.getDispositivo()) : List.of());
+
+            if (!dispositivosQueDebenSonar.isEmpty()) {
+                sesionDispositivoService.actualizarReproduciendo(email, dispositivosQueDebenSonar);
+            }
+            // NO sobreescribir evento.dispositivosActivos — ya viene correcto del frontend
         }
 
-        String email = principal.getName();
-        System.out.println("[WS] Evento recibido de: " + email + " tipo: " + evento.getTipo());
-        evento.setUsuarioEmail(email);
-
-        // Guardar estado para sincronización al entrar
-        actualizarEstado(email, evento);
+        // TRANSFERIR: ya estaba bien
+        if (evento.getTipo() == ReproductorEvent.Tipo.TRANSFERIR
+                && evento.getDispositivosActivos() != null
+                && !evento.getDispositivosActivos().isEmpty()) {
+            sesionDispositivoService.actualizarReproduciendo(
+                email, evento.getDispositivosActivos());
+        }
 
         messagingTemplate.convertAndSend("/topic/reproductor/" + email, evento);
     }
@@ -51,14 +67,14 @@ this.sesionDispositivoService = sesionDispositivoService;
         String email = principal.getName();
         evento.setUsuarioEmail(email);
 
-        // Actualizar en BD qué dispositivos deben sonar
-        if (evento.getDispositivosActivos() != null && !evento.getDispositivosActivos().isEmpty()) {
-            sesionDispositivoService.actualizarDispositivosSonando(
+        if (evento.getDispositivosActivos() != null 
+            && !evento.getDispositivosActivos().isEmpty()) {
+            // ✅ Este método debe existir y escribir en columna 'reproduciendo'
+            sesionDispositivoService.actualizarReproduciendo(
                 email, evento.getDispositivosActivos()
             );
         }
 
-        // Retransmitir a todos los dispositivos del usuario
         messagingTemplate.convertAndSend("/topic/reproductor/" + email, evento);
     }
 
@@ -74,8 +90,24 @@ this.sesionDispositivoService = sesionDispositivoService;
     private void actualizarEstado(String email, ReproductorEvent evento) {
         switch (evento.getTipo()) {
             case CAMBIAR_CANCION:
-                // Canción nueva: guarda todo el evento
+                // Canción nueva: guarda todo el evento (incluye cola)
                 estadoActual.put(email, evento);
+                break;
+            case SIGUIENTE:
+            case ANTERIOR:
+                // Actualizar cancionId, cola y progreso para que un dispositivo
+                // que conecte después del SIGUIENTE/ANTERIOR reciba el estado correcto.
+                estadoActual.computeIfPresent(email, (k, est) -> {
+                    if (evento.getCancionId() != null) {
+                        est.setCancionId(evento.getCancionId());
+                    }
+                    if (evento.getCola() != null) {
+                        est.setCola(evento.getCola());
+                    }
+                    est.setProgreso(0.0);
+                    est.setTipo(ReproductorEvent.Tipo.CAMBIAR_CANCION);
+                    return est;
+                });
                 break;
             case SEEK:
                 // Solo actualiza el progreso si ya hay un estado
